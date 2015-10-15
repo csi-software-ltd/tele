@@ -1,0 +1,8 @@
+*+html{overflow:auto;}
+.layouts-nav li a,.sf-menu>li.first,.sf-menu>li.last{behavior:url(../js/PIE.htc)}
+.list-1 li>span:first-child+span,.list-1 li a>span,footer a>span{filter:alpha(opacity=0)}
+
+input[type="submit"],input[type="reset"],input[type="button"]{
+	behavior:url(../js/PIE.htc);
+	position:relative;
+}
