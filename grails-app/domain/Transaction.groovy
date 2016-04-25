@@ -58,7 +58,7 @@ class Transaction {
     def oMainClient = Client.get(_request.client_id)
     def oClient = (_request.trantype_id in [1,2,3,7,8,9])?Client.get(Client.get(_request.client_id)?.parent):(_request.trantype_id in [5,6,11,12] && _request.rate>0)?Client.get(Client.get(_request.client_id)?.parent):null
 		def oSecondClient = (_request.trantype_id in [1,2,3,7,8,9])?Client.get(Client.get(_request.client_id)?.parent2):(_request.trantype_id in [5,6,11,12] && _request.rate>0)?Client.get(Client.get(_request.client_id)?.parent2):null
-		summa = (_request.summa*_request.rate/(100-_request.rate))-(_request.summa*((oClient?."dealer_${mainTrantype?.rate}"?:0)/100))-(_request.summa*((oSecondClient?."dealer_${mainTrantype?.rate}"?:0)/100))-((_request.bankcomsumma?:0)/(mainTrantype?.valuta_id==643?1f:_request.vrate))-(_request.bankcomconvsumma/(mainTrantype?.valuta_id==643?1f:_request.vrate))
+		summa = (_request.trantype_id in [10,11,12]?(_request.summa*_request.rate/100):(_request.summa*_request.rate/(100-_request.rate)))-(_request.summa*((oClient?."dealer_${mainTrantype?.rate}"?:0)/100))-(_request.summa*((oSecondClient?."dealer_${mainTrantype?.rate}"?:0)/100))-((_request.bankcomsumma?:0)/(mainTrantype?.valuta_id==643?1f:_request.vrate))-(_request.bankcomconvsumma/(mainTrantype?.valuta_id==643?1f:_request.vrate))
     if((_request.trantype_id in [2,3,8,9])&&_request.baseaccount=='rub')
       summa -= (_request.comvrate-_request.vrate)*gDebetSumma/(mainTrantype?.valuta_id==643?1f:_request.vrate)
     else if ((_request.trantype_id in [1,7])&&_request.baseaccount!='rub')
@@ -120,12 +120,15 @@ class Transaction {
   Transaction updatePaymentComissionTransaction(_request){
     request_id = _request.id?:0
     def mainTrantype = Trantype.get(_request.trantype_id)
-    summa = Math.abs(_request.summa*_request.rate/(100-_request.rate))
+    summa = (_request.trantype_id in [10,11,12])?Math.abs(_request.summa*_request.rate/100):Math.abs(_request.summa*_request.rate/(100-_request.rate))
     def oClient = Client.get(_request.client_id)
-    def oTrantype = _request.rate<0?Trantype.get(23):summa*_request.vrate<oClient.account_rub?Trantype.get(24):Trantype.findByIdInListAndCode([24,25,26],mainTrantype?.code?:'')
+    //def oTrantype = _request.rate<0?Trantype.get(23):summa*_request.vrate<oClient.account_rub?Trantype.get(24):Trantype.findByIdInListAndCode([24,25,26],mainTrantype?.code?:'')
+    //changes > always get commission from rub account
+    def oTrantype = _request.rate<0?Trantype.get(23):Trantype.get(24)
     trantype_id = oTrantype?.id?:0
     client_id = _request.client_id?:0
-    vrate = _request.rate<0||summa*_request.vrate<oClient.account_rub?(mainTrantype?.valuta_id==643?1f:_request.vrate):1f
+    //vrate = _request.rate<0||summa*_request.vrate<oClient.account_rub?(mainTrantype?.valuta_id==643?1f:_request.vrate):1f
+    vrate = _request.vrate
     saldo = oClient?.updateAccount(summa,oTrantype,vrate).save(failOnError:true)."account_${oTrantype?.code.toLowerCase()}"?:0
     this
   }

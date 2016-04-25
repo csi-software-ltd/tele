@@ -25,7 +25,7 @@
           if($(ids))
             $(ids).removeClassName('red');
         });
-        ['name','bik','beneficial','platdate'].forEach(function(ids){
+        ['name','bik','beneficial','platdate','reqdate'].forEach(function(ids){
           if($(ids))
             $(ids).up('span').removeClassName('red');
         });
@@ -52,6 +52,8 @@
               case 18: sErrorMsg+='<li>${message(code:"error.blank.message",args:["Дата платежа"])}</li>'; $('platdate').up('span').addClassName('red'); break;
               case 19: sErrorMsg+='<li>${message(code:"error.blank.message",args:["Кому"])}</li>'; $('syscompany_id').addClassName('red'); break;
               case 20: sErrorMsg+='<li>${message(code:"error.blank.message",args:["Кому"])}</li>'; $('syscompany_name').addClassName('red'); break;
+              case 21: sErrorMsg+='<li>${message(code:"error.blank.message",args:["Дата выдачи"])}</li>'; $('reqdate').up('span').addClassName('red'); break;
+              case 22: sErrorMsg+='<li>${message(code:"error.blank.message",args:["Сис. компания"])}</li>'; $('syscompany_id').addClassName('red'); break;
               case 100: sErrorMsg+='<li>${message(code:"error.bderror.message")}</li>'; break;
             }
           });

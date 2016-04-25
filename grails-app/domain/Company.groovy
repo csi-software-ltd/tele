@@ -1,9 +1,8 @@
 class Company {
   def searchService
-  static constraints = {
-  }
   static mapping = {
     version false
+    sort "name"
   }
 
   Long id
@@ -69,23 +68,25 @@ class Company {
     if (_name) Company.findOrCreateByNameAndClient_id(_name,_clId)
     else Company.findOrCreateByBeneficialAndClient_id(_beneficial,_clId)
   }
-  
-  def csiSelectCompanies(iModstatus,iMax,iOffset){
+
+  def csiSelectCompanies(iModstatus,sName,iMax,iOffset){
     def hsSql=[select:'',from:'',where:'',order:'']
-    def hsLong=[:]    
+    def hsLong=[:]
+    def hsString=[:]
 
     hsSql.select="*"
     hsSql.from="company"
-    hsSql.where="is_system=1 AND modstatus =:modstatus"                
-    hsSql.order="name desc"
+    hsSql.where="is_system=1 AND modstatus =:modstatus"+
+                (sName?' AND name like CONCAT("%",:name,"%")':'')
+    hsSql.order="name asc"
 
     hsLong['modstatus']=iModstatus
-    
+    if(sName)
+      hsString['name']=sName
 
-    def hsRes=searchService.fetchDataByPages(hsSql,null,hsLong,null,null,
-      null,null,iMax,iOffset,'id',true,Company.class)
+    searchService.fetchDataByPages(hsSql,null,hsLong,null,hsString,null,null,iMax,iOffset,'id',true,Company.class)
   }
-  
+
   Company csiSetData(lsRequest,lId){    
     comment = lsRequest.comment?:''
     if(!lId){

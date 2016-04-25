@@ -16,7 +16,7 @@
   </span>
   <div id="name_autocomplete" class="autocomplete" style="display:none"></div><br/>
   <label for="syscompany_id">Кому:</label>
-  <g:select name="syscompany_id" value="${req?.syscompany_id?:0}" from="${Company.findAllByIs_system(1)}" optionValue="name" optionKey="id" noSelection="${[0:'не выбран']}" disabled="${req?.modstatus>1?'true':'false'}"/>
+  <g:select name="syscompany_id" value="${req?.syscompany_id?:0}" from="${Company.findAllByIs_systemAndModstatus(1,1)}" optionValue="name" optionKey="id" noSelection="${[0:'не выбран']}" disabled="${req?.modstatus>1?'true':'false'}"/>
   <label for="platdate">Дата платежа:</label>
 <g:if test="${req?.modstatus<2}">
   <g:datepicker class="normal nopad" name="platdate" value="${req?.platdate?String.format('%td.%<tm.%<tY',req.platdate):''}"/>

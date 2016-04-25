@@ -1,11 +1,10 @@
-class Client {  
+class Client {
   def searchService
   def sessionFactory
-  
-  static constraints = {  
-  }  
+
   static mapping = {
     version false
+    sort "name"
   }
 
   Long id
@@ -82,16 +81,15 @@ class Client {
     hsSql.select="*"
     hsSql.from='client'
     hsSql.where="1=1"+
-                ((sName!='')?' AND name like CONCAT("%",:name,"%")':'')+                
+                ((sName!='')?' AND name like CONCAT("%",:name,"%")':'')+
                 ((lId>0)?' AND id =:client_id':'')+
                 ((iIsDealer>0)?""" AND ((dealer_cashin_rate_rub>0)OR(dealer_cashin_rate_usd>0)OR(dealer_cashin_rate_eur>0)OR
-                                       (dealer_cashout_rate_rub>0)OR(dealer_cashout_rate_usd>0)OR(dealer_cashout_rate_eur>0)OR 
+                                       (dealer_cashout_rate_rub>0)OR(dealer_cashout_rate_usd>0)OR(dealer_cashout_rate_eur>0)OR
                                        (dealer_refill_rate_rub>0)OR(dealer_refill_rate_usd>0)OR(dealer_refill_rate_eur>0)OR
                                        (dealer_tran_rate_rub>0)OR(dealer_tran_rate_usd>0)OR(dealer_tran_rate_eur>0))""":'')+
-                ((iIsBlock>0)?' AND is_block=:is_block':'')+    
+                ((iIsBlock>0)?' AND is_block=:is_block':'')+
                 ((iModstatus>-1)?' AND modstatus =:modstatus':'')
-
-    hsSql.order="id desc"
+    hsSql.order="name asc"
 
     if(sName!='')
       hsString['name']=sName
@@ -104,7 +102,21 @@ class Client {
 
     def hsRes=searchService.fetchDataByPages(hsSql,null,hsLong,null,hsString,
       null,null,iMax,iOffset,'id',true,Client.class)
-  }	
+  }
+
+  def csiSelectReportClients(){
+    def hsSql=[select:'',from:'',where:'',order:'']
+
+    hsSql.select="*"
+    hsSql.from='client'
+    hsSql.where="""modstatus != 0 AND NOT ((dealer_cashin_rate_rub>0)OR(dealer_cashin_rate_usd>0)OR(dealer_cashin_rate_eur>0)OR
+                                           (dealer_cashout_rate_rub>0)OR(dealer_cashout_rate_usd>0)OR(dealer_cashout_rate_eur>0)OR
+                                           (dealer_refill_rate_rub>0)OR(dealer_refill_rate_usd>0)OR(dealer_refill_rate_eur>0)OR
+                                           (dealer_tran_rate_rub>0)OR(dealer_tran_rate_usd>0)OR(dealer_tran_rate_eur>0))"""
+    hsSql.order="name asc"
+
+    searchService.fetchDataByPages(hsSql,null,null,null,null,null,null,-1,0,'id',true,Client.class)
+  }
   ////////////////////////////////////
   def csiGetClientsSaldo(){
     def hsSql= [select :'sum(account_rub), sum(account_usd), sum(account_eur)',
@@ -232,12 +244,12 @@ class Client {
     if (_request.trantype_id in [2,3,8,9]){
       if(_request.baseaccount=='rub'&&
         (this."account_${Trantype.get(_request.trantype_id)?.code.toLowerCase()}"+this.account_rub/_request.vrate<_request.summa)
-        ||(this.account_rub-_request.summa*_request.vrate<_request.swiftsumma*_request.vrate&&this."account_${Trantype.get(_request.trantype_id)?.code.toLowerCase()}"<_request.summa*_request.rate/(100-_request.rate)+_request.swiftsumma)
-        ||(this.account_rub-_request.summa*_request.vrate-_request.swiftsumma*_request.vrate<_request.summa*_request.rate*_request.vrate/(100-_request.rate)&&this."account_${Trantype.get(_request.trantype_id)?.code.toLowerCase()}"<_request.summa*_request.rate/(100-_request.rate))) return false
+        /*||(this.account_rub-_request.summa*_request.vrate<_request.swiftsumma*_request.vrate&&this."account_${Trantype.get(_request.trantype_id)?.code.toLowerCase()}"<_request.summa*_request.rate/(100-_request.rate)+_request.swiftsumma)
+        ||(this.account_rub-_request.summa*_request.vrate-_request.swiftsumma*_request.vrate<_request.summa*_request.rate*_request.vrate/(100-_request.rate)&&this."account_${Trantype.get(_request.trantype_id)?.code.toLowerCase()}"<_request.summa*_request.rate/(100-_request.rate))*/) return false
       if((_request.baseaccount?:'rub')!='rub'&&
         (this."account_${Trantype.get(_request.trantype_id)?.code.toLowerCase()}"<_request.summa)
-        ||(this.account_rub<_request.swiftsumma*_request.vrate&&this."account_${Trantype.get(_request.trantype_id)?.code.toLowerCase()}"<_request.summa*100/(100-_request.rate)+_request.swiftsumma)
-        ||(this.account_rub-_request.swiftsumma*_request.vrate<_request.summa*_request.rate*_request.vrate/(100-_request.rate)&&this."account_${Trantype.get(_request.trantype_id)?.code.toLowerCase()}"<_request.summa*100/(100-_request.rate))) return false
+        /*||(this.account_rub<_request.swiftsumma*_request.vrate&&this."account_${Trantype.get(_request.trantype_id)?.code.toLowerCase()}"<_request.summa*100/(100-_request.rate)+_request.swiftsumma)
+        ||(this.account_rub-_request.swiftsumma*_request.vrate<_request.summa*_request.rate*_request.vrate/(100-_request.rate)&&this."account_${Trantype.get(_request.trantype_id)?.code.toLowerCase()}"<_request.summa*100/(100-_request.rate))*/) return false
     }
     if (_request.trantype_id in [1,7]){
       if(this.account_rub<_request.summa&&(_request.baseaccount?:'rub')=='rub') return false

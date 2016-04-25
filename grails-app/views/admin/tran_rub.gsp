@@ -62,6 +62,8 @@
   <input class="comvrate" style="${(req?.baseaccount?:'rub')=='rub'?'display:none':''}" type="text" id="comvrate" name="comvrate" value="${req?.comvrate?:vrate}" ${req?.modstatus>2?'readonly':''}/>
   <label for="baseaccount">Обеспечение:</label>
   <g:select name="baseaccount" value="${req?.baseaccount?:'rub'}" from="${baseaccounts}" optionValue="value" optionKey="key" readonly="${req?.modstatus>2?'true':'false'}" onchange="changebaseaccount('${trantype?.code?.toLowerCase()}',this.value)"/>
+  <label for="syscompany_id">Сис. компания:</label>
+  <g:select name="syscompany_id" value="${req?.syscompany_id?:0}" from="${Company.findAllByIs_systemAndModstatus(1,1)}" optionValue="name" optionKey="id" noSelection="${[0:'не выбран']}" disabled="${req?.modstatus>1?'true':'false'}"/>
   <br /><label for="prim">Назначение платежа:</label>
   <g:textArea name="prim" id="prim" value="${req?.prim?:''}" />
   <input type="hidden" name="company_id" id="company_id" value="${req?.company_id?:0}" />

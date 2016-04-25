@@ -13,8 +13,19 @@ class RequestReportSearch {
   Date moddate
   Integer modstatus
   BigDecimal summa
+  Double vrate
+  Float comvrate
+  BigDecimal rate
   BigDecimal account_rub
+  BigDecimal bankcomsumma
+  BigDecimal bankcomconvsumma
+  BigDecimal swiftsumma
+  Integer syscompany_id
+  String syscompany_name
+  String name
+  String beneficial
   String comment
+
 
   String trname
   String trcode
@@ -22,7 +33,7 @@ class RequestReportSearch {
   BigDecimal syssumma
 
 /////////////////////////////////////////////////////////////////////////////////////////////
-  def csiSelectRequests(lClientId,dDateStart,dDateEnd){
+  def csiSelectRequests(lClientId,dDateStart,dDateEnd,sClname=''){
     def hsSql=[select:'',from:'',where:'',order:'']
     def hsLong=[:]
     def hsString=[:]
@@ -32,7 +43,8 @@ class RequestReportSearch {
     hsSql.where="request.trantype_id=trantype.id and request.modstatus=3 and request.client_id=client.id"+
                 (lClientId>0?' AND request.client_id =:client_id':'')+
                 (dDateStart?' AND request.moddate >=:date_start':'')+
-                (dDateEnd?' AND request.moddate <=:date_end':'')
+                (dDateEnd?' AND request.moddate <=:date_end':'')+
+                (sClname!=''?' AND client.name =:name':'')
 
     hsSql.order="request.moddate asc"
 
@@ -42,8 +54,10 @@ class RequestReportSearch {
       hsString['date_start'] = String.format('%tF',dDateStart)
     if(dDateEnd)
       hsString['date_end'] = String.format('%tF',dDateEnd+1)
+    if(sClname!='')
+      hsString['name']=sClname
 
-    def hsRes = searchService.fetchData(hsSql,hsLong,null,hsString,null,RequestReportSearch.class)
+    searchService.fetchData(hsSql,hsLong,null,hsString,null,RequestReportSearch.class)
   }
 
 }

@@ -19,6 +19,7 @@
     <div class="tabs padtop fright">
       <a id="requestreportlink" class="active" onclick="displaysection('requestreport')"><i class="icon-check icon-large"></i> выполненные запросы</a>
       <a id="transactionreportlink" onclick="displaysection('transactionreport')"><i class="icon-list-alt icon-large"></i> выписка по операциям</a>
+      <a id="revisereportlink" onclick="displaysection('revisereport')"><i class="icon-calendar icon-large"></i> сверка</a>
     </div>
     <div class="clear"></div>
     <div class="padtop filter">
@@ -46,6 +47,17 @@
         <div class="inline">
           <g:actionSubmit value="PDF" class="spacing" action="transreport"/>
           <g:actionSubmit value="XLS" action="transreportXLS"/>
+        </div>
+      </g:form>
+      <g:form style="display:none" name="revisereportForm" controller="client" target="_blank">
+        <div class="inline spacing">
+          <label for="revisereport_start" class="auto">Дата c:</label>
+          <g:datepicker class="normal nopad" name="revisereport_start" value=""/>
+          <label for="revisereport_end" class="auto">по:</label>
+          <g:datepicker class="normal nopad" name="revisereport_end" value=""/>
+        </div>
+        <div class="inline">
+          <g:actionSubmit value="XLS" action="revisereportXLS"/>
         </div>
       </g:form>
       <div class="clear"></div>

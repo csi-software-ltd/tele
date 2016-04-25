@@ -2,6 +2,7 @@
   <head>
     <title>Административное приложение: Клиенты</title>
     <meta name="layout" content="administrator" />
+    <g:javascript library="prototype/autocomplete" />
     <g:javascript>
       function clickPaginate(event){
         event.stop();
@@ -13,7 +14,10 @@
           { success: $('ajax_wrap') },
           link.href,
           { evalScripts: true });
-      }      
+      }
+      new Autocomplete('name', {
+        serviceUrl:'${resource(dir:"admin",file:"clientname_autocomplete")}'
+      });
     </g:javascript>      
   </head>
   <body onload="\$('form_submit_button').click();">
@@ -22,7 +26,7 @@
         <label class="auto" for="client_id">Код:</label>
         <input type="text" class="mini" name="client_id" value="${inrequest?.client_id?:''}"/>
         <label class="auto" for="name">Название:</label>
-        <input type="text" name="name" />
+        <input type="text" id="name" name="name" />
         <label class="auto" for="modstatus">Статус:</label>
         <g:select class="auto" name="modstatus" value="" keys="${-1..1}" from="${['все','неактивный','активный']}" value="${inrequest?.modstatus?:-1}"/><br/>
         <label class="auto" for="is_dealer">
@@ -33,7 +37,7 @@
           <input type="checkbox" name="is_block" value="1" <g:if test="${inrequest?.is_block}">checked</g:if> />
           Блокирован
         </label>
-        <div class="fright">          
+        <div class="fright">
           <input type="reset" class="spacing" value="Сброс" />
           <input type="submit" id="form_submit_button" value="Показать" />
           <g:link action="clientdetail" class="button">Добавить &nbsp;<i class="icon-angle-right icon-large"></i></g:link>

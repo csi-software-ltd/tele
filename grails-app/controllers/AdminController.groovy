@@ -232,7 +232,22 @@ class AdminController {
 
     return hsRes
   }
-  ////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+  def clientname_autocomplete = {
+    requestService.init(this)
+    def hsRes=requestService.getContextAndDictionary(true)
+    hsRes.admin = session.admin
+
+    hsRes.query = requestService.getStr('query')
+    hsRes.suggestions = []
+    if(hsRes.query?:''){
+      Client.findAllByNameIlike(hsRes.query+'%',[max:10]).each{
+        hsRes.suggestions << it.name
+      }
+    }
+    render hsRes as JSON
+  }
+
   def clientlist = {
     checkAccess(2)
     requestService.init(this)
@@ -849,7 +864,7 @@ class AdminController {
     }
 
     def oRequest = new RequestAdmin()
-    hsRes.requests = oRequest.csiSelectRequests(hsRes.inrequest.client_id?:0l,hsRes.inrequest.trantype_id?:0l,hsRes.inrequest.modstatus,hsRes.inrequest.date_start?:'',hsRes.inrequest.date_end?:'',hsRes.inrequest.request_id?:0l,20,hsRes.inrequest.offset)
+    hsRes.requests = oRequest.csiSelectRequests(hsRes.inrequest.client_id?:0l,hsRes.inrequest.trantype_id?[hsRes.inrequest.trantype_id]:null,hsRes.inrequest.modstatus,hsRes.inrequest.date_start?:'',hsRes.inrequest.date_end?:'',hsRes.inrequest.request_id?:0l,20,hsRes.inrequest.offset)
     hsRes.reqmodstatus = Reqmodstatus.findAllByIdNot(0).inject([:]){map, status -> map[status.id]=[name:status.name,icon:status.icon];map}
     hsRes.trantypes = Trantype.list().inject([:]){map, trantype -> map[trantype.id]=[name:trantype.name,code:trantype.code];map}
 
@@ -989,6 +1004,7 @@ class AdminController {
                                     ['inn','kpp','ogrn','name','bik','bank','bankcity','cor_account','account','prim',
                                      'beneficial','iban','bbank','baddress','swift','purpose','comment','baseaccount','laddress','formid','syscompany_name'],null,['summa','vrate','comvrate','bankcomsumma','bankcomconvsumma','swiftsumma','basebankcomsumma'])
     hsRes.inrequest.platdate = requestService.getDate('platdate')
+    hsRes.inrequest.reqdate = requestService.getDate('reqdate')
     hsRes.inrequest.strbankcomsumma = requestService.getStr('bankcomsumma')
 
     hsRes.request = Request.get(lId)
@@ -1017,6 +1033,8 @@ class AdminController {
         hsRes.result.errorcode<<8
       if(!hsRes.inrequest.prim)
         hsRes.result.errorcode<<9
+      if(!(hsRes.inrequest.syscompany_id?:hsRes.request?.syscompany_id))
+        hsRes.result.errorcode<<22
     }else if(hsRes.inrequest.trantype_id in [2,3]){
       if(!hsRes.inrequest.beneficial)
         hsRes.result.errorcode<<10
@@ -1036,6 +1054,9 @@ class AdminController {
         hsRes.result.errorcode<<5
       if(!(hsRes.inrequest.syscompany_name?:hsRes.request?.syscompany_name))
         hsRes.result.errorcode<<20
+    }else if((hsRes.inrequest.trantype_id?:hsRes.request?.trantype_id) in [7,8,9]){
+      if(!hsRes.inrequest.reqdate)
+        hsRes.result.errorcode<<21
     }
     if(!lId&&!hsRes.inrequest.client_id)
       hsRes.result.errorcode << 14
@@ -1295,9 +1316,13 @@ class AdminController {
 
     def oObject = new RequestReportSearch()
     hsRes.report = oObject.csiSelectRequests(0l,hsRes.report_start,hsRes.report_end)
-    hsRes.sum_RUB = hsRes.sum_USD = hsRes.sum_EUR = 0g
+    hsRes.sum_RUB = hsRes.sum_USD = hsRes.sum_EUR = hsRes.sum_cash = hsRes.sum_transit = hsRes.sum_conv = hsRes.sum_refill = 0g
     hsRes.report.each{
       hsRes."sum_$it.trcode" += it.summa
+      hsRes.sum_cash += (it.trantype_id==7 ? it.summa : 0)
+      hsRes.sum_transit += (it.trantype_id==1 ? it.summa : 0)
+      hsRes.sum_conv += (it.trantype_id in [2,3] ? it.summa*it.vrate : 0)
+      hsRes.sum_refill += (it.trantype_id==10 ? it.summa : 0)
     }
 
     if (hsRes.report.size()==0) {
@@ -1307,19 +1332,98 @@ class AdminController {
         save(response.outputStream)
       }
     } else {
-      def rowCounter = 4
+      def rowCounter = 9
       def title = "Отчет по выполненным запросам "+(!(hsRes.report_start||hsRes.report_end)?"за все время":((hsRes.report_start?"с ${String.format('%tF',hsRes.report_start)}":"")+" по ${String.format('%tF',hsRes.report_end?:new Date())}"))
       new WebXlsxExporter().with {
         setResponseHeaders(response)
-        putCellValue(0, 3, title)
-        fillRow(['Номер запроса','Дата запроса','Клиент','Тип запроса','Валюта запроса','Сумма запроса','Комиссия системы, руб'],3,false)
-        hsRes.report.each{ record ->
-          fillRow([record.id, String.format('%tF',record.moddate), record.clname, record.trname, record.trcode, number(value:record.summa).toString(), number(value:record.syssumma).toString()], rowCounter++, false)
+        setColumnWidth(1,30*256)
+        putCellValue(0, 1, title)
+        putCellValue(2, 0, 'кеш')
+        putCellValue(2, 1, hsRes.sum_cash)
+        putCellValue(3, 0, 'транзит')
+        putCellValue(3, 1, hsRes.sum_transit)
+        putCellValue(4, 0, 'конверт')
+        putCellValue(4, 1, hsRes.sum_conv)
+        putCellValue(5, 0, 'пополнение')
+        putCellValue(5, 1, hsRes.sum_refill)
+        putCellValue(6, 0, 'приход')
+        fillRow(['Номер запроса','Дата запроса','Клиент','Тип запроса','Валюта запроса','Сумма запроса','Комиссия системы, руб'],8,false,Tools.getXlsTableHeaderStyle(7))
+        hsRes.report.eachWithIndex{ record, index ->
+          fillRow([record.id.toString(),
+                   String.format('%tF',record.moddate),
+                   record.clname,
+                   record.trname,
+                   record.trcode,
+                   record.summa,
+                   record.syssumma], rowCounter++, false, index == 0 ? Tools.getXlsTableFirstLineStyle(7) : index == hsRes.report.size()-1 ? Tools.getXlsTableLastLineStyle(7) : Tools.getXlsTableLineStyle(7))
         }
         fillRow(["ИТОГО", "", "", "", "", ""], rowCounter++, false)
-        fillRow(["", "Сумма запросов по рублям", "", number(value:hsRes.sum_RUB).toString(), "", ""], rowCounter++, false)
-        fillRow(["", "Сумма запросов по долларам", "", number(value:hsRes.sum_USD).toString(), "", ""], rowCounter++, false)
-        fillRow(["", "Сумма запросов по евро", "", number(value:hsRes.sum_EUR).toString(), "", ""], rowCounter++, false)
+        fillRow(["", "Сумма запросов по рублям", "", hsRes.sum_RUB], rowCounter++, false, [null]+Tools.getXlsTableFirstLineStyle(3))
+        fillRow(["", "Сумма запросов по долларам", "", hsRes.sum_USD], rowCounter++, false, [null]+Tools.getXlsTableLineStyle(3))
+        fillRow(["", "Сумма запросов по евро", "", hsRes.sum_EUR], rowCounter++, false, [null]+Tools.getXlsTableLastLineStyle(3))
+        setColumnAutoWidth(2)
+        setColumnAutoWidth(3)
+        save(response.outputStream)
+      }
+    }
+    return
+  }
+
+  def clsaldoreport = {
+    checkAccess(7)
+    requestService.init(this)
+    def hsRes=requestService.getContextAndDictionary(true)
+    hsRes.action_id = 7
+    hsRes.admin = session.admin
+
+    hsRes.report = new Client().csiSelectReportClients()
+    hsRes.sum_RUB = hsRes.sum_USD = hsRes.sum_EUR = 0g
+    hsRes.report.records.each{
+      hsRes.sum_RUB += it.account_rub
+      hsRes.sum_USD += it.account_usd
+      hsRes.sum_EUR += it.account_eur
+    }
+
+    renderPdf(template:'clsaldoreport',model:hsRes,filename:'clsaldoreport.pdf')
+  }
+
+  def clsaldoreportXLS = {
+    checkAccess(7)
+    requestService.init(this)
+    def hsRes=requestService.getContextAndDictionary(true)
+    hsRes.action_id = 7
+    hsRes.admin = session.admin
+
+
+    hsRes.report = new Client().csiSelectReportClients()
+    hsRes.sum_RUB = hsRes.sum_USD = hsRes.sum_EUR = 0g
+    hsRes.report.records.each{
+      hsRes.sum_RUB += it.account_rub
+      hsRes.sum_USD += it.account_usd
+      hsRes.sum_EUR += it.account_eur
+    }
+
+    if (hsRes.report.records.size()==0) {
+      new WebXlsxExporter().with {
+        setResponseHeaders(response)
+        putCellValue(0, 4, "Нет данных за указанный период")
+        save(response.outputStream)
+      }
+    } else {
+      def rowCounter = 4
+      def title = "Отчет по клиентским остаткам"
+      new WebXlsxExporter().with {
+        setResponseHeaders(response)
+        putCellValue(0, 1, title)
+        fillRow(['Название','Остаток, руб','Остаток, usd','Остаток, eur'],3,false,Tools.getXlsTableHeaderStyle(4))
+        hsRes.report.records.eachWithIndex{ record, index ->
+          fillRow([record.name,
+                   record.account_rub,
+                   record.account_usd,
+                   record.account_eur], rowCounter++, false, index == 0 ? Tools.getXlsTableFirstLineStyle(4) : index == hsRes.report.records.size()-1 ? Tools.getXlsTableLastLineStyle(4) : Tools.getXlsTableLineStyle(4))
+        }
+        fillRow(["ИТОГО", hsRes.sum_RUB, hsRes.sum_USD, hsRes.sum_EUR], rowCounter++, false, Tools.getXlsTableLastLineStyle(4))
+        setColumnAutoWidth(0)
         save(response.outputStream)
       }
     }
@@ -1376,16 +1480,22 @@ class AdminController {
       def title = "Выписка операций "+(!(hsRes.report_start||hsRes.report_end)?"за все время":((hsRes.report_start?"с ${String.format('%tF',hsRes.report_start)}":"")+" по ${String.format('%tF',hsRes.report_end?:new Date())}"))
       new WebXlsxExporter().with {
         setResponseHeaders(response)
-        putCellValue(0, 3, title)
-        fillRow(['Номер операции','Дата операции','Тип операции','Сумма операции','Сальдо'],3,false)
-        hsRes.report.each{ record ->
-          fillRow([record.id, String.format('%tF',record.inputdate), record.trname, g.number(value:record.summa*record.vrate).toString(), (record.trantype_id in [13,22])?number(value:record.saldo).toString():''], rowCounter++, false)
+        setColumnWidth(1,30*256)
+        putCellValue(0, 1, title)
+        fillRow(['Номер операции','Дата операции','Тип операции','Сумма операции','Сальдо'],3,false,Tools.getXlsTableHeaderStyle(5))
+        hsRes.report.eachWithIndex{ record, index ->
+          fillRow([record.id.toString(),
+                   String.format('%tF',record.inputdate),
+                   record.trname,
+                   record.summa*record.vrate,
+                   (record.trantype_id in [13,22])?record.saldo:''], rowCounter++, false, index == 0 ? Tools.getXlsTableFirstLineStyle(5) : index == hsRes.report.size()-1 ? Tools.getXlsTableLastLineStyle(5) : Tools.getXlsTableLineStyle(5))
         }
         fillRow(["ИТОГО", "", "", "", ""], rowCounter++, false)
-        fillRow(["", "Сальдо на начало периода", "", number(value:hsRes.report.first().saldo-hsRes.report.first().summa*hsRes.report.first().vrate).toString(), ""], rowCounter++, false)
-        fillRow(["", "Обороты за период", "", number(value:hsRes.mainobor).toString(), ""], rowCounter++, false)
-        if (hsRes.type) fillRow(["", "Обороты по затратам", "", number(value:hsRes.addobor).toString(), ""], rowCounter++, false)
-        fillRow(["", "Сальдо на конец периода", "", number(value:hsRes.report.findAll{it.trantype_id in [13,22]}.last().saldo).toString(), ""], rowCounter++, false)
+        fillRow(["", "Сальдо на начало периода", "", hsRes.report.first().saldo-hsRes.report.first().summa*hsRes.report.first().vrate, ""], rowCounter++, false)
+        fillRow(["", "Обороты за период", "", hsRes.mainobor, ""], rowCounter++, false)
+        if (hsRes.type) fillRow(["", "Обороты по затратам", "", hsRes.addobor, ""], rowCounter++, false)
+        fillRow(["", "Сальдо на конец периода", "", hsRes.report.findAll{it.trantype_id in [13,22]}.last().saldo, ""], rowCounter++, false)
+        setColumnAutoWidth(2)
         save(response.outputStream)
       }
     }
@@ -1445,13 +1555,166 @@ class AdminController {
       new WebXlsxExporter().with {
         setResponseHeaders(response)
         putCellValue(0, 3, title)
-        fillRow(['Посредник','Сумма вознаграждений','Кол-во операций'],3,false)
-        hsRes.report.each{ record ->
-          fillRow([record.clname, number(value:record.feesumma).toString(), record.trcount], rowCounter++, false)
+        fillRow(['Посредник','Сумма вознаграждений','Кол-во операций'],3,false,Tools.getXlsTableHeaderStyle(3))
+        hsRes.report.eachWithIndex{ record, index ->
+          fillRow([record.clname, record.feesumma, record.trcount.toString()], rowCounter++, false, index == 0 ? Tools.getXlsTableFirstLineStyle(3) : index == hsRes.report.size()-1 ? Tools.getXlsTableLastLineStyle(3) : Tools.getXlsTableLineStyle(3))
         }
         fillRow(["ИТОГО", "", ""], rowCounter++, false)
-        fillRow(["Сумма всех вознаграждений", number(value:hsRes.overall).toString(), ""], rowCounter++, false)
-        fillRow(["Кол-во операций", hsRes.overallcount, ""], rowCounter++, false)
+        fillRow(["Сумма всех вознаграждений", hsRes.overall, ""], rowCounter++, false)
+        fillRow(["Кол-во операций", hsRes.overallcount.toString(), ""], rowCounter++, false)
+        save(response.outputStream)
+      }
+    }
+    return
+  }
+
+  def revisereportXLS = {
+    checkAccess(7)
+    requestService.init(this)
+    def hsRes=requestService.getContextAndDictionary(true)
+    hsRes.action_id = 7
+    hsRes.admin = session.admin
+
+    hsRes.report_start = requestService.getDate('revisereport_start')
+    hsRes.report_end = requestService.getDate('revisereport_end')
+    hsRes.client_name = requestService.getStr('client_name')
+
+    hsRes.report = new RequestReportSearch().csiSelectRequests(0l,hsRes.report_start,hsRes.report_end,hsRes.client_name?:'')
+
+    if (hsRes.report.size()==0) {
+      new WebXlsxExporter().with {
+        setResponseHeaders(response)
+        putCellValue(0, 4, "Нет данных за указанный период")
+        save(response.outputStream)
+      }
+    } else {
+      hsRes.trantypes = Trantype.list().inject([:]){map, trantype -> map[trantype.id]=[name:trantype.name,code:trantype.code];map}
+      def rowCounter = 3
+      def title = "Сверка.${hsRes.client_name?' Клиент: '+hsRes.client_name:' Все клиенты.'}"+(!(hsRes.report_start||hsRes.report_end)?" за все время":((hsRes.report_start?" с ${String.format('%tF',hsRes.report_start)}":"")+" по ${String.format('%tF',hsRes.report_end?:new Date())}"))
+      new WebXlsxExporter().with {
+        setResponseHeaders(response)
+        setColumnWidth(2,30*256)
+        putCellValue(0, 2, title)
+        fillRow(['Клиент','Дата исполнения','Тип запроса','Сумма запроса','Валюта','Откуда','Куда','Процент комиссии','Процент посредника','Сумма комиссии с клиента','Сумма на покупку валюты','Банковская комиссия','Курс','Курс ЦБ','Свифт','Остаток клиента','Наш доход','Бонус посредника'],rowCounter++,false,Tools.getXlsTableHeaderStyle(18))
+        hsRes.report.eachWithIndex{ record, index ->
+          fillRow([record.clname,
+                   String.format('%tF',record.moddate),
+                   record.trname,
+                   record.summa,
+                   record.trcode,
+                   record.trantype_id in [10,11,12]?record.name:'',
+                   record.trantype_id in [10,11,12]?(record.syscompany_name?:Company.get(record.syscompany_id)?.name?:''):record.trantype_id in [1]?record.name:record.trantype_id in [2,3]?record.beneficial:'',
+                   record.rate,
+                   Transaction.findAllByRequest_idAndTrantype_id(record.id,16).sum{it.summa*100/record.summa}?:0,
+                   Transaction.findAllByRequest_idAndTrantype_idInList(record.id,[23,24,25,26]).sum{it.summa*it.vrate}?:0,
+                   Transaction.findAllByRequest_idAndTrantype_id(record.id,31).sum{it.summa*it.vrate}?:0,
+                   record.bankcomsumma,
+                   record.comvrate>1?record.comvrate:null,
+                   record.vrate>1?record.vrate:null,
+                   record.swiftsumma,
+                   Transaction.findByRequest_idAndTrantype_idInList(record.id,[23,24,25,26])?.saldo?:0,
+                   record.syssumma,
+                   Transaction.findAllByRequest_idAndTrantype_id(record.id,16).sum{it.summa}?:0], rowCounter++, false, index == 0 ? Tools.getXlsTableFirstLineStyle(18) : index == hsRes.report.size()-1 ? Tools.getXlsTableLastLineStyle(18) : Tools.getXlsTableLineStyle(18))
+        }
+        setColumnAutoWidth(0)
+        setColumnAutoWidth(5)
+        setColumnAutoWidth(6)
+        save(response.outputStream)
+      }
+    }
+    return
+  }
+
+  def bronreportXLS = {
+    checkAccess(7)
+    requestService.init(this)
+    def hsRes=requestService.getContextAndDictionary(true)
+    hsRes.action_id = 7
+    hsRes.admin = session.admin
+
+    hsRes.report_start = requestService.getDate('bronreport_start')
+    hsRes.report_end = requestService.getDate('bronreport_end')
+    hsRes.client_name = requestService.getStr('client_name')
+
+    hsRes.report = new RequestAdmin().csiSelectBronRequests(hsRes.client_name?:'',[7,8,9],2,hsRes.report_start,hsRes.report_end)
+
+    if (hsRes.report.size()==0) {
+      new WebXlsxExporter().with {
+        setResponseHeaders(response)
+        putCellValue(0, 4, "Нет данных за указанный период")
+        save(response.outputStream)
+      }
+    } else {
+      hsRes.trantypes = Trantype.list().inject([:]){map, trantype -> map[trantype.id]=[name:trantype.name,code:trantype.code];map}
+      def rowCounter = 3
+      def title = "Отчет по бронированию средств.${hsRes.client_name?' Клиент: '+hsRes.client_name:''}"+(!(hsRes.report_start||hsRes.report_end)?" за все время":((hsRes.report_start?" с ${String.format('%tF',hsRes.report_start)}":"")+(hsRes.report_end?" по ${String.format('%tF',hsRes.report_end?:new Date())}":"")))
+      new WebXlsxExporter().with {
+        setResponseHeaders(response)
+        putCellValue(0, 1, title)
+        hsRes.report.groupBy{it.reqdate}.each{ date ->
+          putCellValue(rowCounter, 0, 'Дата выдачи')
+          putCellValue(rowCounter++, 1, String.format('%tF',date.key?:new Date()))
+          fillRow(['Клиент','Сумма к выдаче','Валюта','Текущий остаток'],rowCounter++,false,Tools.getXlsTableHeaderStyle(4))
+          date.value.eachWithIndex{ record, index ->
+            fillRow([record.client_name, record.summa, hsRes.trantypes[record.trantype_id].code, record.cl_account_rub], rowCounter++, false, index == 0 ? Tools.getXlsTableFirstLineStyle(4) : index == date.value.size()-1 ? Tools.getXlsTableLastLineStyle(4) : Tools.getXlsTableLineStyle(4))
+          }
+          fillRow(["ИТОГО", date.value.sum{it.summa*it.vrate}], rowCounter++, false)
+          rowCounter++
+        }
+        rowCounter++
+        fillRow(["Общая сумма бронирования", hsRes.report.sum{it.summa*it.vrate}], rowCounter++, false, Tools.getXlsTableLineStyle(2))
+        save(response.outputStream)
+      }
+    }
+    return
+  }
+
+  def syscompreportXLS = {
+    checkAccess(7)
+    requestService.init(this)
+    def hsRes=requestService.getContextAndDictionary(true)
+    hsRes.action_id = 7
+    hsRes.admin = session.admin
+
+    hsRes.inrequest=[:]
+    hsRes.inrequest.report_start = requestService.getDate('syscompreport_start')
+    hsRes.inrequest.report_end = requestService.getDate('syscompreport_end')
+    hsRes.inrequest.company_name = requestService.getStr('company_name')
+
+    hsRes.report = new RequestCompany()."${hsRes.inrequest.company_name?'csiSelectCompanyRequests':'csiSelectSummary'}"(hsRes.inrequest)
+
+    if (hsRes.report.size()==0) {
+      new WebXlsxExporter().with {
+        setResponseHeaders(response)
+        putCellValue(0, 4, "Нет данных за указанный период")
+        save(response.outputStream)
+      }
+    } else {
+      hsRes.trantypes = Trantype.list().inject([:]){map, trantype -> map[trantype.id]=[name:trantype.name,code:trantype.code];map}
+      def rowCounter = 3
+      def title = "Движение средств по ${hsRes.inrequest.company_name?' компании '+hsRes.inrequest.company_name:' системным компаниям'}"+(!(hsRes.inrequest.report_start||hsRes.inrequest.report_end)?" за все время":((hsRes.inrequest.report_start?" с ${String.format('%tF',hsRes.inrequest.report_start)}":"")+(hsRes.inrequest.report_end?" по ${String.format('%tF',hsRes.inrequest.report_end?:new Date())}":"")))
+      new WebXlsxExporter().with {
+        setResponseHeaders(response)
+        putCellValue(0, 1, title)
+        if (hsRes.inrequest.company_name){
+          fillRow(['Дата','Клиентская компания','Тип платежа','Приход','Расход'],rowCounter++,false,Tools.getXlsTableHeaderStyle(5))
+          hsRes.report.eachWithIndex{ record, index ->
+            fillRow([record.moddate,
+                     record.name,
+                     hsRes.trantypes[record.trantype_id].name,
+                     record.creditsum,
+                     record.debetsum], rowCounter++, false, index == 0 ? Tools.getXlsTableFirstLineStyle(5) : index == hsRes.report.size()-1 ? Tools.getXlsTableLastLineStyle(5) : Tools.getXlsTableLineStyle(5))
+          }
+          fillRow(['','',"ИТОГО", hsRes.report.sum{it.creditsum}, hsRes.report.sum{it.debetsum}], rowCounter++, false, Tools.getXlsTableLineStyle(5))
+        } else {
+          fillRow(['Системная компания','Приход','Расход'],rowCounter++,false,Tools.getXlsTableHeaderStyle(3))
+          hsRes.report.eachWithIndex{ record, index ->
+            fillRow([record.company_name,
+                     record.creditsum,
+                     record.debetsum], rowCounter++, false, index == 0 ? Tools.getXlsTableFirstLineStyle(3) : index == hsRes.report.size()-1 ? Tools.getXlsTableLastLineStyle(3) : Tools.getXlsTableLineStyle(3))
+          }
+          fillRow(["ИТОГО", hsRes.report.sum{it.creditsum}, hsRes.report.sum{it.debetsum}], rowCounter++, false, Tools.getXlsTableLineStyle(3))
+        }
         save(response.outputStream)
       }
     }
@@ -1478,7 +1741,22 @@ class AdminController {
 
     return hsRes
   }
-  ////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+  def companyname_autocomplete = {
+    requestService.init(this)
+    def hsRes=requestService.getContextAndDictionary(true)
+    hsRes.admin = session.admin
+
+    hsRes.query = requestService.getStr('query')
+    hsRes.suggestions = []
+    if(hsRes.query?:''){
+      Company.findAllByIs_systemAndNameIlike(1,hsRes.query+'%',[max:10]).each{
+        hsRes.suggestions << it.name
+      }
+    }
+    render hsRes as JSON
+  }
+
   def companylist = {
     checkAccess(8)
     requestService.init(this)
@@ -1492,12 +1770,13 @@ class AdminController {
     } else {
       hsRes.inrequest=[:]
       hsRes.inrequest.modstatus = requestService.getIntDef('modstatus',-1)
+      hsRes.inrequest.name = requestService.getStr('name')
       hsRes.inrequest.offset = requestService.getOffset()
       session.lastRequest = hsRes.inrequest
     }
 
     def oCompany = new Company()
-    hsRes.companies = oCompany.csiSelectCompanies(hsRes.inrequest.modstatus,20,hsRes.inrequest.offset)
+    hsRes.companies = oCompany.csiSelectCompanies(hsRes.inrequest.modstatus,hsRes.inrequest.name?:'',20,hsRes.inrequest.offset)
 
     return hsRes
   }

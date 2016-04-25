@@ -18,4 +18,10 @@
 </g:if><g:if test="${trantype.is_debet}">
   <label for="baseaccount">Обеспечение:</label>
   <g:select name="baseaccount" value="${req?.baseaccount?:'rub'}" from="${baseaccounts}" optionValue="value" optionKey="key" disabled="${req?.modstatus>1?'true':'false'}"/>
+  <label for="reqdate">Дата выдачи:</label>
+<g:if test="${req?.modstatus<2}">
+  <g:datepicker class="normal nopad" name="reqdate" value="${String.format('%td.%<tm.%<tY',req?.reqdate?:new Date())}"/>
+</g:if><g:else>
+  <input type="text" name="reqdate" readonly value="${String.format('%td.%<tm.%<tY',req.reqdate)}" />
+</g:else><br />
 </g:if>

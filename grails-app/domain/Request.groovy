@@ -6,6 +6,7 @@ class Request {
   }
   static constraints = {
     platdate(nullable:true)
+    reqdate(nullable:true)
     bankcomsumma(nullable:true)
   }
 
@@ -19,6 +20,7 @@ class Request {
   Date inputdate = new Date()
   Date moddate = new Date()
   Date platdate
+  Date reqdate
 
   Integer trantype_id
   Integer modstatus = 0
@@ -153,6 +155,7 @@ class Request {
     comment = lsRequest.comment?:''
 
     platdate = lsRequest.platdate
+    reqdate = lsRequest.reqdate
 
     if (!(lsRequest.modstatus in [2,3]) || Client.get(this.client_id)?.checkAvailableSum(this))
       modstatus = lsRequest.modstatus?:0

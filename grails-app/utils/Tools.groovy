@@ -335,4 +335,55 @@ class Tools  {
     return (iDaynumber>0?iDaynumber+(iDaynumber in 11..20||iDaynumber%10==0||iDaynumber%10 in 5..9?' дней ':iDaynumber%10==1?' день ':' дня '):'')+String.format('%tT',iTime-180*60*1000)
   }
 
+  static ArrayList getXlsTableHeaderStyle(Integer size){
+    if(size<=0) return null
+    else if (size==1) return [[wrap:true,borderTop:'THICK',borderLeft:'THICK',borderRight:'THICK',borderBottom:'MEDIUM']]
+    else {
+      def styles = [[wrap:true,borderTop:'THICK',borderLeft:'THICK',borderRight:'THIN',borderBottom:'MEDIUM']]
+      while(--size>1) {
+        styles << [wrap:true,borderTop:'THICK',borderLeft:'THIN',borderRight:'THIN',borderBottom:'MEDIUM']
+      }
+      styles << [wrap:true,borderTop:'THICK',borderLeft:'THIN',borderRight:'THICK',borderBottom:'MEDIUM']
+      return styles
+    }
+  }
+
+  static ArrayList getXlsTableFirstLineStyle(Integer size){
+    if(size<=0) return null
+    else if (size==1) return [[wrap:false,borderTop:'MEDIUM',borderLeft:'THICK',borderRight:'THICK',borderBottom:'THIN']]
+    else {
+      def styles = [[wrap:false,borderTop:'MEDIUM',borderLeft:'THICK',borderRight:'THIN',borderBottom:'THIN']]
+      while(--size>1) {
+        styles << [wrap:false,borderTop:'MEDIUM',borderLeft:'THIN',borderRight:'THIN',borderBottom:'THIN']
+      }
+      styles << [wrap:false,borderTop:'MEDIUM',borderLeft:'THIN',borderRight:'THICK',borderBottom:'THIN']
+      return styles
+    }
+  }
+
+  static ArrayList getXlsTableLastLineStyle(Integer size){
+    if(size<=0) return null
+    else if (size==1) return [[wrap:false,borderTop:'THIN',borderLeft:'THICK',borderRight:'THICK',borderBottom:'THICK']]
+    else {
+      def styles = [[wrap:false,borderTop:'THIN',borderLeft:'THICK',borderRight:'THIN',borderBottom:'THICK']]
+      while(--size>1) {
+        styles << [wrap:false,borderTop:'THIN',borderLeft:'THIN',borderRight:'THIN',borderBottom:'THICK']
+      }
+      styles << [wrap:false,borderTop:'THIN',borderLeft:'THIN',borderRight:'THICK',borderBottom:'THICK']
+      return styles
+    }
+  }
+
+  static ArrayList getXlsTableLineStyle(Integer size){
+    if(size<=0) return null
+    else if (size==1) return [[wrap:false,borderTop:'THIN',borderLeft:'THICK',borderRight:'THICK',borderBottom:'THIN']]
+    else {
+      def styles = [[wrap:false,borderTop:'THIN',borderLeft:'THICK',borderRight:'THIN',borderBottom:'THIN']]
+      while(--size>1) {
+        styles << [wrap:false,borderTop:'THIN',borderLeft:'THIN',borderRight:'THIN',borderBottom:'THIN']
+      }
+      styles << [wrap:false,borderTop:'THIN',borderLeft:'THIN',borderRight:'THICK',borderBottom:'THIN']
+      return styles
+    }
+  }
 }

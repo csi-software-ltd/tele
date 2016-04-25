@@ -584,6 +584,7 @@ class ClientController {
                                     ['inn','kpp','ogrn','name','bik','bank','bankcity','cor_account','account','prim',
                                      'beneficial','iban','bbank','baddress','swift','purpose','comment','baseaccount','laddress','syscompany_name'],null,['summa'])
     hsRes.inrequest.platdate = requestService.getDate('platdate')
+    hsRes.inrequest.reqdate = requestService.getDate('reqdate')
 
     hsRes.request = Request.findByClient_idAndId(hsRes.client.id,lId)
     if ((!hsRes.request&&lId)||!((hsRes.request?.modstatus?:0) in -2..1)) {
@@ -629,6 +630,9 @@ class ClientController {
         hsRes.result.errorcode<<5
       if(!(hsRes.inrequest.syscompany_name?:hsRes.request?.syscompany_name))
         hsRes.result.errorcode<<20
+    }else if((hsRes.inrequest.trantype_id?:hsRes.request?.trantype_id) in [7,8,9]){
+      if(!hsRes.inrequest.reqdate)
+        hsRes.result.errorcode<<21
     }
     hsRes.inrequest.rate = Client.get(hsRes.client.id)?."${Trantype.get(hsRes.inrequest.trantype_id?:hsRes.request?.trantype_id)?.rate}"
     hsRes.inrequest.perm = Client.get(hsRes.client.id)?."${Trantype.get(hsRes.inrequest.trantype_id?:hsRes.request?.trantype_id)?.permissions}"
@@ -778,15 +782,21 @@ class ClientController {
       def title = "Отчет по выполненным запросам "+(!(hsRes.report_start||hsRes.report_end)?"за все время":((hsRes.report_start?"с ${String.format('%tF',hsRes.report_start)}":"")+" по ${String.format('%tF',hsRes.report_end?:new Date())}"))
       new WebXlsxExporter().with {
         setResponseHeaders(response)
-        putCellValue(0, 3, title)
-        fillRow(['Номер запроса','Дата запроса','Тип запроса','Валюта запроса','Сумма запроса'],3,false)
-        hsRes.report.each{ record ->
-          fillRow([record.id, String.format('%tF',record.moddate), record.trname, record.trcode, g.number(value:record.summa).toString()], rowCounter++, false)
+        setColumnWidth(1,30*256)
+        putCellValue(0, 1, title)
+        fillRow(['Номер запроса','Дата запроса','Тип запроса','Валюта запроса','Сумма запроса'],3,false,Tools.getXlsTableHeaderStyle(5))
+        hsRes.report.eachWithIndex{ record, index ->
+          fillRow([record.id.toString(),
+                   String.format('%tF',record.moddate),
+                   record.trname,
+                   record.trcode,
+                   record.summa], rowCounter++, false, index == 0 ? Tools.getXlsTableFirstLineStyle(5) : index == hsRes.report.size()-1 ? Tools.getXlsTableLastLineStyle(5) : Tools.getXlsTableLineStyle(5))
         }
         fillRow(["ИТОГО", "", "", "", ""], rowCounter++, false)
-        fillRow(["", "Сумма запросов по рублям", "", number(value:hsRes.sum_RUB).toString()], rowCounter++, false)
-        fillRow(["", "Сумма запросов по долларам", "", number(value:hsRes.sum_USD).toString()], rowCounter++, false)
-        fillRow(["", "Сумма запросов по евро", "", number(value:hsRes.sum_EUR).toString()], rowCounter++, false)
+        fillRow(["", "Сумма запросов по рублям", "", hsRes.sum_RUB], rowCounter++, false, [null]+Tools.getXlsTableFirstLineStyle(3))
+        fillRow(["", "Сумма запросов по долларам", "", hsRes.sum_USD], rowCounter++, false, [null]+Tools.getXlsTableLineStyle(3))
+        fillRow(["", "Сумма запросов по евро", "", hsRes.sum_EUR], rowCounter++, false, [null]+Tools.getXlsTableLastLineStyle(3))
+        setColumnAutoWidth(2)
         save(response.outputStream)
       }
     }
@@ -839,19 +849,88 @@ class ClientController {
       def title = "Выписка операций "+(!(hsRes.report_start||hsRes.report_end)?"за все время":((hsRes.report_start?"с ${String.format('%tF',hsRes.report_start)}":"")+" по ${String.format('%tF',hsRes.report_end?:new Date())}"))
       new WebXlsxExporter().with {
         setResponseHeaders(response)
-        putCellValue(0, 3, title)
-        fillRow(['Номер операции','Дата операции','Тип операции','Кредит', 'Дебет','Сальдо'],3,false)
-        hsRes.report.each{ record ->
-          fillRow([record.id, String.format('%tF',record.inputdate), record.ttname, number(value:record.credit*record.vrate).toString(), number(value:Math.abs(record.debet*record.vrate)).toString(), number(value:record.saldo).toString()], rowCounter++, false)
+        setColumnWidth(1, 30*256)
+        putCellValue(0, 1, title)
+        fillRow(['Номер операции','Дата операции','Тип операции','Кредит', 'Дебет','Сальдо'],3,false,Tools.getXlsTableHeaderStyle(6))
+        hsRes.report.eachWithIndex{ record, index ->
+          fillRow([record.id.toString(),
+                   String.format('%tF',record.inputdate),
+                   record.ttname,
+                   record.credit*record.vrate,
+                   Math.abs(record.debet*record.vrate),
+                   record.saldo], rowCounter++, false, index == 0 ? Tools.getXlsTableFirstLineStyle(6) : index == hsRes.report.size()-1 ? Tools.getXlsTableLastLineStyle(6) : Tools.getXlsTableLineStyle(6))
         }
         fillRow(["ИТОГО", "", "", "", "", ""], rowCounter++, false)
-        fillRow(["", "Сальдо на начало периода", "", number(value:hsRes.report.first().saldo-hsRes.report.first().credit*hsRes.report.first().vrate+hsRes.report.first().debet*hsRes.report.first().vrate).toString(), "", ""], rowCounter++, false)
-        fillRow(["", "Обороты по кредиту", "", number(value:hsRes.creditobor).toString(), "", ""], rowCounter++, false)
-        fillRow(["", "Обороты по дебету", "", number(value:hsRes.debetobor).toString(), "", ""], rowCounter++, false)
-        fillRow(["", "Сальдо на конец периода", "", number(value:hsRes.report.last().saldo).toString(), "", ""], rowCounter++, false)
+        fillRow(["", "Сальдо на начало периода", "", hsRes.report.first().saldo-hsRes.report.first().credit*hsRes.report.first().vrate+hsRes.report.first().debet*hsRes.report.first().vrate], rowCounter++, false, [null]+Tools.getXlsTableFirstLineStyle(3))
+        fillRow(["", "Обороты по кредиту", "", hsRes.creditobor], rowCounter++, false, [null]+Tools.getXlsTableLineStyle(3))
+        fillRow(["", "Обороты по дебету", "", hsRes.debetobor], rowCounter++, false, [null]+Tools.getXlsTableLineStyle(3))
+        fillRow(["", "Сальдо на конец периода", "", hsRes.report.last().saldo], rowCounter++, false, [null]+Tools.getXlsTableLastLineStyle(3))
+        setColumnAutoWidth(2)
         save(response.outputStream)
       }
     }
     return
-  }    
+  }
+
+  def revisereportXLS = {
+    requestService.init(this)
+    def hsRes=requestService.getContextAndDictionary(false,true)
+    hsRes.client = Client.get(session.client.id)
+
+    hsRes.report_start = requestService.getDate('revisereport_start')
+    hsRes.report_end = requestService.getDate('revisereport_end')
+
+    hsRes.report = new RequestReportSearch().csiSelectRequests(hsRes.client.id,hsRes.report_start,hsRes.report_end)
+
+    if (hsRes.report.size()==0) {
+      new WebXlsxExporter().with {
+        setResponseHeaders(response)
+        putCellValue(0, 4, "Нет данных за указанный период")
+        save(response.outputStream)
+      }
+    } else {
+      hsRes.trantypes = Trantype.list().inject([:]){map, trantype -> map[trantype.id]=[name:trantype.name,code:trantype.code];map}
+      def rowCounter = 3
+      def title = "Сверка."+(!(hsRes.report_start||hsRes.report_end)?" за все время":((hsRes.report_start?" с ${String.format('%tF',hsRes.report_start)}":"")+" по ${String.format('%tF',hsRes.report_end?:new Date())}"))
+      new WebXlsxExporter().with {
+        setResponseHeaders(response)
+        setColumnWidth(1, 30*256)
+        putCellValue(0, 1, title)
+        if (hsRes.client.is_tran_eur||hsRes.client.is_tran_usd)
+          fillRow(['Дата исполнения','Тип запроса','Сумма запроса','Валюта','Откуда','Куда','Процент комиссии','Сумма комиссии','Сумма на покупку валюты','Курс','Курс ЦБ','Свифт','Остаток клиента'],rowCounter++,false,Tools.getXlsTableHeaderStyle(13))
+        else
+          fillRow(['Дата исполнения','Тип запроса','Сумма запроса','Валюта','Откуда','Куда','Процент комиссии','Сумма комиссии','Остаток клиента'],rowCounter++,false,Tools.getXlsTableHeaderStyle(9))
+        hsRes.report.eachWithIndex{ record, index ->
+          if (hsRes.client.is_tran_eur||hsRes.client.is_tran_usd)
+            fillRow([String.format('%tF',record.moddate),
+                     record.trname,
+                     record.summa,
+                     record.trcode,
+                     record.trantype_id in [10,11,12]?record.name:'',
+                     record.trantype_id in [10,11,12]?(record.syscompany_name?:Company.get(record.syscompany_id)?.name?:''):record.trantype_id in [1]?record.name:record.trantype_id in [2,3]?record.beneficial:'',
+                     record.rate,
+                     Transaction.findAllByRequest_idAndTrantype_idInList(record.id,[23,24,25,26]).sum{it.summa*it.vrate}?:0,
+                     Transaction.findAllByRequest_idAndTrantype_id(record.id,31).sum{it.summa*it.vrate}?:0,
+                     record.comvrate>1?record.comvrate:null,
+                     record.vrate>1?record.vrate:null,
+                     record.swiftsumma,
+                     Transaction.findByRequest_idAndTrantype_idInList(record.id,[23,24,25,26])?.saldo?:0], rowCounter++, false, index == 0 ? Tools.getXlsTableFirstLineStyle(13) : index == hsRes.report.size()-1 ? Tools.getXlsTableLastLineStyle(13) : Tools.getXlsTableLineStyle(13))
+          else
+            fillRow([String.format('%tF',record.moddate),
+                     record.trname,
+                     record.summa,
+                     record.trcode,
+                     record.trantype_id in [10,11,12]?record.name:'',
+                     record.trantype_id in [10,11,12]?(record.syscompany_name?:Company.get(record.syscompany_id)?.name?:''):record.trantype_id in [1]?record.name:record.trantype_id in [2,3]?record.beneficial:'',
+                     record.rate,
+                     Transaction.findAllByRequest_idAndTrantype_idInList(record.id,[23,24,25,26]).sum{it.summa*it.vrate}?:0,
+                     Transaction.findByRequest_idAndTrantype_idInList(record.id,[23,24,25,26])?.saldo?:0], rowCounter++, false, index == 0 ? Tools.getXlsTableFirstLineStyle(9) : index == hsRes.report.size()-1 ? Tools.getXlsTableLastLineStyle(9) : Tools.getXlsTableLineStyle(9))
+        }
+        setColumnAutoWidth(4)
+        setColumnAutoWidth(5)
+        save(response.outputStream)
+      }
+    }
+    return
+  }
 }

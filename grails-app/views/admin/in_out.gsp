@@ -23,5 +23,11 @@
   <label for="baseaccount">Обеспечение:</label>
   <g:select name="baseaccount" value="${req?.baseaccount?:'rub'}" from="${baseaccounts}" optionValue="value" optionKey="key" disabled="${req?.modstatus>2?'true':'false'}" onchange="changebaseaccount('${trantype?.code?.toLowerCase()}',this.value)"/>
   <input type="hidden" name="basebankcomsumma" value="${bankcomsumma}" />
+  <label for="reqdate">Дата выдачи:</label>
+<g:if test="${req?.modstatus<2}">
+  <g:datepicker class="normal nopad" name="reqdate" value="${String.format('%td.%<tm.%<tY',req?.reqdate?:new Date())}"/>
+</g:if><g:else>
+  <input type="text" name="reqdate" readonly value="${String.format('%td.%<tm.%<tY',req.reqdate)}" />
+</g:else><br />
 </g:if>
   <script type="text/javascript">recalculate($("summa").value,${req?.rate?:client."$trantype.rate"},${req?.account_rub?:client.account_rub},${(trantype.id in [4,5,6]?-1:1)},${trantype.valuta_id==643?false:true})</script>
